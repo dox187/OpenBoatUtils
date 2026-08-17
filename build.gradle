@@ -113,14 +113,21 @@ stonecutter {
         replace '\\bBoat\\b', 'AbstractBoat', '\\bAbstractBoat\\b', 'Boat'
     }
 
-    // 1.21.10 moved the boat classes into world.entity.vehicle.boat; VehicleEntity stayed
-    // behind, so files naming it opt out with //~ !boat_package.
-    replacements.string(
+    // 1.21.10 moved the boat classes into world.entity.vehicle.boat; VehicleEntity and the
+    // minecarts stayed in world.entity.vehicle, so only the boat family's package segment may be
+    // rewritten. The class name is matched by a lookahead instead of being consumed: overlapping
+    // matches are discarded, so claiming those characters here would swallow the !boat_entity
+    // rewrite and leave the leaf Boat class hooked. Requiring a boat name after the segment also
+    // makes each direction idempotent, since neither pattern matches its own output.
+    def boatClasses = '(?:AbstractChestBoat|AbstractBoat|ChestBoat|ChestRaft|Boat|Raft)\\b'
+    replacements.regex(
             current.parsed.matches('>=1.21.10'),
             "!boat_package"
     ) {
-        replace 'net.minecraft.world.entity.vehicle.', 'net.minecraft.world.entity.vehicle.boat.'
-        replace 'net/minecraft/world/entity/vehicle/', 'net/minecraft/world/entity/vehicle/boat/'
+        replace "net\\.minecraft\\.world\\.entity\\.vehicle\\.(?=$boatClasses)", 'net.minecraft.world.entity.vehicle.boat.',
+                "net\\.minecraft\\.world\\.entity\\.vehicle\\.boat\\.(?=$boatClasses)", 'net.minecraft.world.entity.vehicle.'
+        replace "net/minecraft/world/entity/vehicle/(?=$boatClasses)", 'net/minecraft/world/entity/vehicle/boat/',
+                "net/minecraft/world/entity/vehicle/boat/(?=$boatClasses)", 'net/minecraft/world/entity/vehicle/'
     }
 
     // 1.21.10 renamed ResourceLocation to Identifier.

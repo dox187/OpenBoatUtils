@@ -1,4 +1,3 @@
-//~ !boat_package
 package dev.o7moon.openboatutils;
 
 import dev.o7moon.openboatutils.network.ConfigurationByteBufChannel;

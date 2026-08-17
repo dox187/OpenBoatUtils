@@ -1,4 +1,3 @@
-//~ !boat_entity
 package dev.o7moon.openboatutils.network;
 
 import dev.o7moon.openboatutils.*;

@@ -66,15 +66,17 @@ public abstract class EntityMixin {
     }
 
     //? if >= 26 {
-    /*@Redirect(
+    /*// Boats have zero bounciness, so an axis stopped by a collision arrives here as an
+    // exact zero; that zero is what identifies the wall hit.
+    @Redirect(
             method = "restituteMovementAfterCollisions",
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/world/entity/Entity;setDeltaMovement(Lnet/minecraft/world/phys/Vec3;)V"
             )
     )
-    private void hookWalltapVec(Entity instance, Vec3 value, BlockState effectState, boolean xCollision, boolean zCollision, Vec3 movement) {
-        openboatutils$walltap(instance, value.x, value.y, value.z, xCollision, zCollision);
+    private void hookWalltap(Entity instance, Vec3 value) {
+        openboatutils$walltap(instance, value.x, value.y, value.z);
     }
     *///? } else {
     @Redirect(
@@ -85,12 +87,12 @@ public abstract class EntityMixin {
             )
     )
     private void hookWalltap(Entity instance, double x, double y, double z) {
-        openboatutils$walltap(instance, x, y, z, x == 0, z == 0);
+        openboatutils$walltap(instance, x, y, z);
     }
     //? }
 
     @Unique
-    private void openboatutils$walltap(Entity instance, double x, double y, double z, boolean xCollision, boolean zCollision) {
+    private void openboatutils$walltap(Entity instance, double x, double y, double z) {
         if ((Object) this instanceof Boat) {
             ISettingContext context = OpenBoatUtils.instance.getActiveContext();
 
@@ -173,8 +175,8 @@ public abstract class EntityMixin {
                 }
 
                 if (multiplier > 0) {
-                    if (xCollision) x = before.x * -multiplier;
-                    if (zCollision) z = before.z * -multiplier;
+                    if (x == 0) x = before.x * -multiplier;
+                    if (z == 0) z = before.z * -multiplier;
                 }
             }
         }
