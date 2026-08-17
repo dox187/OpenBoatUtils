@@ -1,7 +1,12 @@
 plugins {
-    id 'fabric-loom' version '1.11-SNAPSHOT'
+    id 'fabric-loom' version "${loom_version}" apply false
+    id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
     id 'maven-publish'
 }
+
+// Minecraft 26.x is unobfuscated and needs loom's no-remap plugin; older versions need the
+// remapping one. A plugins block cannot be conditional, so both resolve and one gets applied.
+apply plugin: project.loom_plugin
 
 version = project.mod_version
 group = project.maven_group
@@ -16,10 +21,14 @@ repositories {
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    if (project.loom_plugin == 'fabric-loom') {
+        mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+        modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+        modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    } else {
+        implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+        implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    }
 }
 
 def rawVersion = project.findProperty("mod_version")
@@ -42,7 +51,7 @@ processResources {
     }
 }
 
-def targetJavaVersion = 21
+def targetJavaVersion = project.java_release as int
 tasks.withType(JavaCompile).configureEach {
     it.options.encoding = "UTF-8"
     if (targetJavaVersion >= 10 || JavaVersion.current().isJava10Compatible()) {
