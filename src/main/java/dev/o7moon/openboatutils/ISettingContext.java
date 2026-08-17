@@ -1,9 +1,9 @@
 package dev.o7moon.openboatutils;
 
-import net.minecraft.block.Block;
-import net.minecraft.entity.EntityType;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.level.block.Block;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
@@ -11,7 +11,7 @@ import java.util.*;
 public interface ISettingContext {
 
     ISettingContext VANILLA = getVanilla();
-    Map<Identifier, Float> VANILLA_SLIPPERINESS = getVanillaSlipperinessMap();
+    Map<ResourceLocation, Float> VANILLA_SLIPPERINESS = getVanillaSlipperinessMap();
 
     void switchTo();
 
@@ -34,9 +34,9 @@ public interface ISettingContext {
     float getSwimForce();
     CollisionMode getCollisionMode();
     boolean hasStepWhileFalling();
-    @Nullable Float getBlockSlipperiness(Identifier id);
+    @Nullable Float getBlockSlipperiness(ResourceLocation id);
     boolean isEntityTypeFiltered(EntityType<?> type);
-    @Nullable Float getBlockSetting(Identifier id, PerBlockSettingType type);
+    @Nullable Float getBlockSetting(ResourceLocation id, PerBlockSettingType type);
     int getCollisionResolution();
     float getWalltapMultiplier();
     int getJumps();
@@ -50,15 +50,15 @@ public interface ISettingContext {
     float getMaxSpeedResistance();
     boolean hasHoneyCompatibility();
 
-    Set<Identifier> getBlocksWithSettings();
+    Set<ResourceLocation> getBlocksWithSettings();
     boolean hasAnyBlocksWithSetting(PerBlockSettingType type);
 
-    static Map<Identifier, Float> getVanillaSlipperinessMap() {
-        Map<Identifier, Float> map = new HashMap<>();
+    static Map<ResourceLocation, Float> getVanillaSlipperinessMap() {
+        Map<ResourceLocation, Float> map = new HashMap<>();
 
-        for (Block b : Registries.BLOCK.stream().toList()) {
-            if (b.getSlipperiness() != 0.6f){
-                map.put(Registries.BLOCK.getId(b), b.getSlipperiness());
+        for (Block b : BuiltInRegistries.BLOCK.stream().toList()) {
+            if (b.getFriction() != 0.6f){
+                map.put(BuiltInRegistries.BLOCK.getKey(b), b.getFriction());
             }
         }
 
@@ -89,9 +89,9 @@ public interface ISettingContext {
             @Override public float getSwimForce() { return 0; }
             @Override public CollisionMode getCollisionMode() { return CollisionMode.VANILLA; }
             @Override public boolean hasStepWhileFalling() { return false; }
-            @Override public @Nullable Float getBlockSlipperiness(Identifier id) { return VANILLA_SLIPPERINESS.get(id); }
+            @Override public @Nullable Float getBlockSlipperiness(ResourceLocation id) { return VANILLA_SLIPPERINESS.get(id); }
             @Override public boolean isEntityTypeFiltered(EntityType<?> type) { return false; }
-            @Override public @Nullable Float getBlockSetting(Identifier id, PerBlockSettingType type) { return null; }
+            @Override public @Nullable Float getBlockSetting(ResourceLocation id, PerBlockSettingType type) { return null; }
             @Override public int getCollisionResolution() { return 1; }
             @Override public float getWalltapMultiplier() { return 0; }
             @Override public int getJumps() { return 1; }
@@ -105,7 +105,7 @@ public interface ISettingContext {
             @Override public float getMaxSpeedResistance() { return 0; }
             @Override public boolean hasHoneyCompatibility() { return false; }
 
-            @Override public Set<Identifier> getBlocksWithSettings() { return Set.of(); }
+            @Override public Set<ResourceLocation> getBlocksWithSettings() { return Set.of(); }
 
             @Override
             public boolean hasAnyBlocksWithSetting(PerBlockSettingType type) { return false; }

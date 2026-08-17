@@ -2,17 +2,17 @@ package dev.o7moon.openboatutils.mixin;
 
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.o7moon.openboatutils.*;
-import net.minecraft.block.BlockState;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityDimensions;
-import net.minecraft.entity.EntityPose;
-import net.minecraft.entity.vehicle.BoatEntity;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityDimensions;
+import net.minecraft.world.entity.Pose;
+import net.minecraft.world.entity.vehicle.Boat;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -30,27 +30,34 @@ import java.util.UUID;
 @Mixin(Entity.class)
 public abstract class EntityMixin {
 
-    @Shadow private World world;
+    @Shadow private Level level;
 
     @Shadow
-    public abstract UUID getUuid();
+    public abstract UUID getUUID();
 
     @Shadow
-    private static Vec3d adjustMovementForCollisions(Vec3d movement, Box entityBoundingBox, List<VoxelShape> collisions) {
+    private static Vec3 collideWithShapes(Vec3 movement, AABB entityBoundingBox, List<VoxelShape> collisions) {
         throw new UnsupportedOperationException("Implemented via mixin");
     }
 
     @Shadow
-    private static float[] collectStepHeights(Box collisionBox, List<VoxelShape> collisions, float f, float stepHeight) {
+    private static float[] collectCandidateStepUpHeights(AABB collisionBox, List<VoxelShape> collisions, float f, float stepHeight) {
         throw new UnsupportedOperationException("Implemented via mixin");
     }
 
+    //? if >= 26 {
+    /*@Shadow
+    private static List<VoxelShape> collectCollidersIgnoringWorldBorder(@Nullable Entity entity, Level level, List<VoxelShape> regularCollisions, AABB movingEntityBoundingBox) {
+        throw new UnsupportedOperationException("Implemented via mixin");
+    }
+    *///? } else {
     @Shadow
-    private static List<VoxelShape> findCollisionsForMovement(@Nullable Entity entity, World world, List<VoxelShape> regularCollisions, Box movingEntityBoundingBox) {
+    private static List<VoxelShape> collectColliders(@Nullable Entity entity, Level level, List<VoxelShape> regularCollisions, AABB movingEntityBoundingBox) {
         throw new UnsupportedOperationException("Implemented via mixin");
     }
+    //? }
 
-    @Inject(method = "getStepHeight", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "maxUpStep", at = @At("HEAD"), cancellable = true)
     public void getStepHeight(CallbackInfoReturnable<Float> cir) {
         if (this instanceof GetStepHeight step) {
             cir.setReturnValue(step.openboatutils$getStepHeight());
@@ -58,29 +65,47 @@ public abstract class EntityMixin {
         }
     }
 
+    //? if >= 26 {
+    /*@Redirect(
+            method = "restituteMovementAfterCollisions",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/world/entity/Entity;setDeltaMovement(Lnet/minecraft/world/phys/Vec3;)V"
+            )
+    )
+    private void hookWalltapVec(Entity instance, Vec3 value, BlockState effectState, boolean xCollision, boolean zCollision, Vec3 movement) {
+        openboatutils$walltap(instance, value.x, value.y, value.z, xCollision, zCollision);
+    }
+    *///? } else {
     @Redirect(
             method = "move",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/entity/Entity;setVelocity(DDD)V"
+                    target = "Lnet/minecraft/world/entity/Entity;setDeltaMovement(DDD)V"
             )
     )
     private void hookWalltap(Entity instance, double x, double y, double z) {
-        if ((Object) this instanceof BoatEntity) {
+        openboatutils$walltap(instance, x, y, z, x == 0, z == 0);
+    }
+    //? }
+
+    @Unique
+    private void openboatutils$walltap(Entity instance, double x, double y, double z, boolean xCollision, boolean zCollision) {
+        if ((Object) this instanceof Boat) {
             ISettingContext context = OpenBoatUtils.instance.getActiveContext();
 
             if (context != null && (context.getWalltapMultiplier() > 0 ||
                     context.hasAnyBlocksWithSetting(PerBlockSettingType.WALLTAP_MULTIPLIER))) {
 
-                Vec3d before = instance.getVelocity();
+                Vec3 before = instance.getDeltaMovement();
                 float multiplier = context.getWalltapMultiplier();
 
                 List<BlockPos> blockPositions = new ArrayList<>();
 
                 if (context.hasAnyBlocksWithSetting(PerBlockSettingType.WALLTAP_MULTIPLIER)) {
-                    Box box = instance.getBoundingBox();
-                    Vec3d min = box.getMinPos();
-                    Vec3d max = box.getMaxPos();
+                    AABB box = instance.getBoundingBox();
+                    Vec3 min = box.getMinPosition();
+                    Vec3 max = box.getMaxPosition();
 
                     int minX = (int) Math.floor(min.x + 1e-5);
                     int minY = (int) Math.floor(min.y + 1e-5);
@@ -123,11 +148,7 @@ public abstract class EntityMixin {
                 }
 
                 if (!blockPositions.isEmpty()) {
-                    //? >= 1.21.9 {
-                    /*World world = instance.getEntityWorld();
-                     *///? } else {
-                    World world = instance.getWorld();
-                    //? }
+                    Level world = instance.level();
 
                     int n = 0;
                     float multipliers = 0;
@@ -136,7 +157,7 @@ public abstract class EntityMixin {
                         BlockState state = world.getBlockState(pos);
 
                         Float v = context.getBlockSetting(
-                                Registries.BLOCK.getId(state.getBlock()),
+                                BuiltInRegistries.BLOCK.getKey(state.getBlock()),
                                 PerBlockSettingType.WALLTAP_MULTIPLIER
                         );
 
@@ -152,19 +173,19 @@ public abstract class EntityMixin {
                 }
 
                 if (multiplier > 0) {
-                    if (x == 0) x = before.x * -multiplier;
-                    if (z == 0) z = before.z * -multiplier;
+                    if (xCollision) x = before.x * -multiplier;
+                    if (zCollision) z = before.z * -multiplier;
                 }
             }
         }
 
-        instance.setVelocity(x, y, z);
+        instance.setDeltaMovement(x, y, z);
     }
 
-    @ModifyVariable(method = "adjustMovementForCollisions(Lnet/minecraft/util/math/Vec3d;)Lnet/minecraft/util/math/Vec3d;", at = @At("STORE"), ordinal = 3)
+    @ModifyVariable(method = "collide(Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;", at = @At("STORE"), ordinal = 3)
     private boolean hookStepHeightOnGroundCheck(boolean original) {
 
-        if ((Object) this instanceof BoatEntity) {
+        if ((Object) this instanceof Boat) {
             @Nullable ISettingContext context = OpenBoatUtils.instance.getActiveContext();
 
             if (context == null) return original;
@@ -178,43 +199,43 @@ public abstract class EntityMixin {
     }
 
     @Inject(method = "getDimensions", at = @At("RETURN"), cancellable = true)
-    public void getDimensions(EntityPose pose, CallbackInfoReturnable<EntityDimensions> cir) {
-        if ((Object) this instanceof BoatEntity) {
-            @Nullable ISettingContext boatContext = OpenBoatUtils.instance.getEntityContext(this.getUuid());
+    public void getDimensions(Pose pose, CallbackInfoReturnable<EntityDimensions> cir) {
+        if ((Object) this instanceof Boat) {
+            @Nullable ISettingContext boatContext = OpenBoatUtils.instance.getEntityContext(this.getUUID());
 
             if (boatContext != null) {
-                cir.setReturnValue(cir.getReturnValue().scaled(Math.abs(boatContext.getScale())));
+                cir.setReturnValue(cir.getReturnValue().scale(Math.abs(boatContext.getScale())));
             } else {
                 @Nullable ISettingContext context = OpenBoatUtils.instance.getActiveContext();
 
                 if (context != null) {
-                    cir.setReturnValue(cir.getReturnValue().scaled(Math.abs(context.getScale())));
+                    cir.setReturnValue(cir.getReturnValue().scale(Math.abs(context.getScale())));
                 }
             }
         }
     }
 
     @Inject(
-            method = "adjustMovementForCollisions(Lnet/minecraft/util/math/Vec3d;)Lnet/minecraft/util/math/Vec3d;",
+            method = "collide(Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;",
             at = @At(
                     value = "INVOKE",
                     //? >= 1.21.5 {
-                    /*target = "Lnet/minecraft/util/math/Vec3d;subtract(DDD)Lnet/minecraft/util/math/Vec3d;",
+                    /*target = "Lnet/minecraft/world/phys/Vec3;subtract(DDD)Lnet/minecraft/world/phys/Vec3;",
                     *///? } else {
-                    target = "Lnet/minecraft/util/math/Vec3d;add(DDD)Lnet/minecraft/util/math/Vec3d;",
+                    target = "Lnet/minecraft/world/phys/Vec3;add(DDD)Lnet/minecraft/world/phys/Vec3;",
                     //? }
                     shift = At.Shift.BEFORE
             )
     )
-    private void hookStepUp(Vec3d movement, CallbackInfoReturnable<Vec3d> cir) {
-        if ((Object) this instanceof BoatEntity boat) {
+    private void hookStepUp(Vec3 movement, CallbackInfoReturnable<Vec3> cir) {
+        if ((Object) this instanceof Boat boat) {
             @Nullable ISettingContext context = OpenBoatUtils.instance.getActiveContext();
 
             if (context != null) {
                 float slipperiness = ((GetNearbySetting) boat).openboatutils$getAverageNearbySetting(context, boat, PerBlockSettingType.STEP_UP_SLIPPERINESS);
 
                 if (slipperiness != 1) {
-                    boat.setVelocity(boat.getVelocity().multiply(slipperiness));
+                    boat.setDeltaMovement(boat.getDeltaMovement().scale(slipperiness));
                 }
             }
         }
@@ -223,81 +244,85 @@ public abstract class EntityMixin {
     // Previously based on https://github.com/Moulberry/MC276641Fix/blob/master/src/main/java/com/moulberry/mc276641fix/mixin/MixinEntity.java
     // Modified to re-evaluate the candidates after each step so enable stepping past the step size if it is possible to step multiple times
     @Inject(
-            method = "adjustMovementForCollisions(Lnet/minecraft/util/math/Vec3d;)Lnet/minecraft/util/math/Vec3d;",
+            method = "collide(Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/entity/Entity;collectStepHeights(Lnet/minecraft/util/math/Box;Ljava/util/List;FF)[F",
+                    target = "Lnet/minecraft/world/entity/Entity;collectCandidateStepUpHeights(Lnet/minecraft/world/phys/AABB;Ljava/util/List;FF)[F",
                     shift = At.Shift.BY,
                     by = 2
             ),
             cancellable = true
     )
     private void fixMultipleStep(
-            Vec3d velocity,
-            CallbackInfoReturnable<Vec3d> cir,
+            Vec3 velocity,
+            CallbackInfoReturnable<Vec3> cir,
             @Local(ordinal = 1) List<VoxelShape> colliders,
-            @Local(ordinal = 0) Box aABB,
-            @Local(ordinal = 1) Box aABB2,
-            @Local(ordinal = 1) Vec3d vec3d
+            @Local(ordinal = 0) AABB aABB,
+            @Local(ordinal = 1) AABB aABB2,
+            @Local(ordinal = 1) Vec3 vec3d
     ) {
         @Nullable ISettingContext context = OpenBoatUtils.instance.getActiveContext();
         Entity entity = (Entity) (Object) this;
-        if (context != null && entity instanceof BoatEntity boat && context.hasMultiStepping()) {
-            Vec3d result = openboatutils$attemptStep(boat, velocity, aABB2, colliders, vec3d, 0, 100);
+        if (context != null && entity instanceof Boat boat && context.hasMultiStepping()) {
+            Vec3 result = openboatutils$attemptStep(boat, velocity, aABB2, colliders, vec3d, 0, 100);
             double d = aABB.minY - aABB2.minY;
 
             double correctedY = Math.abs(result.y - vec3d.y) > 1.0E-7
                     ? result.y - d
                     : vec3d.y;
 
-            cir.setReturnValue(new Vec3d(result.x, correctedY, result.z));
+            cir.setReturnValue(new Vec3(result.x, correctedY, result.z));
         }
     }
 
     @Unique
-    private Vec3d openboatutils$attemptStep(BoatEntity boat, Vec3d velocity, Box box, List<VoxelShape> colliders, Vec3d fallback, int depth, int maxDepth) {
+    private Vec3 openboatutils$attemptStep(Boat boat, Vec3 velocity, AABB box, List<VoxelShape> colliders, Vec3 fallback, int depth, int maxDepth) {
         if (depth >= maxDepth) return fallback;
 
         float f = (float) fallback.y;
-        float[] heights = collectStepHeights(box, colliders, boat.getStepHeight(), f);
+        float[] heights = collectCandidateStepUpHeights(box, colliders, boat.maxUpStep(), f);
 
-        Vec3d best = fallback;
+        Vec3 best = fallback;
 
         for (float height : heights) {
-            Vec3d candidate = adjustMovementForCollisions(
-                    new Vec3d(velocity.x, height, velocity.z), box, colliders
+            Vec3 candidate = collideWithShapes(
+                    new Vec3(velocity.x, height, velocity.z), box, colliders
             );
-            if (candidate.horizontalLengthSquared() > best.horizontalLengthSquared()) {
+            if (candidate.horizontalDistanceSqr() > best.horizontalDistanceSqr()) {
                 best = candidate;
             }
         }
 
         if (best == fallback) return fallback;
 
-        Vec3d remaining = new Vec3d(
+        Vec3 remaining = new Vec3(
                 velocity.x - best.x,
                 velocity.y,
                 velocity.z - best.z
         );
 
-        if (remaining.horizontalLengthSquared() > 1.0E-7) {
-            Box movedBox = box.offset(best.x, best.y, best.z);
-            Box stretched = movedBox.stretch(remaining);
+        if (remaining.horizontalDistanceSqr() > 1.0E-7) {
+            AABB movedBox = box.move(best.x, best.y, best.z);
+            AABB stretched = movedBox.expandTowards(remaining);
 
-            List<VoxelShape> newColliders = findCollisionsForMovement(
+            //? if >= 26 {
+            /*List<VoxelShape> newColliders = collectCollidersIgnoringWorldBorder(
+            *///? } else {
+            List<VoxelShape> newColliders = collectColliders(
+            //? }
                     boat,
-                    this.world,
+                    this.level,
                     colliders,
                     stretched
             );
 
-            Vec3d nextFallback = adjustMovementForCollisions(remaining, movedBox, newColliders);
+            Vec3 nextFallback = collideWithShapes(remaining, movedBox, newColliders);
 
             boolean blockedX = remaining.x != nextFallback.x;
             boolean blockedZ = remaining.z != nextFallback.z;
 
             if (blockedX || blockedZ) {
-                Vec3d next = openboatutils$attemptStep(boat, remaining, movedBox, newColliders, nextFallback, depth + 1, maxDepth);
+                Vec3 next = openboatutils$attemptStep(boat, remaining, movedBox, newColliders, nextFallback, depth + 1, maxDepth);
                 best = best.add(next);
             } else {
                 best = best.add(nextFallback);

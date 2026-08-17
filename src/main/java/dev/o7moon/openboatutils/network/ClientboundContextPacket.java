@@ -5,8 +5,8 @@ import dev.o7moon.openboatutils.ISettingContext;
 import dev.o7moon.openboatutils.OpenBoatUtils;
 import dev.o7moon.openboatutils.StoredContext;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
-import net.minecraft.network.PacketByteBuf;
-import net.minecraft.util.Identifier;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
@@ -18,7 +18,7 @@ public enum ClientboundContextPacket {
     STORE_CONTEXT,
     ENTITY_CONTEXT;
 
-    public static void handlePacket(PacketByteBuf buf) {
+    public static void handlePacket(FriendlyByteBuf buf) {
         try {
             short packetID = buf.readShort();
 
@@ -28,7 +28,7 @@ public enum ClientboundContextPacket {
 
                 handlePacket(buf);
 
-                PacketByteBuf packet = PacketByteBufs.create();
+                FriendlyByteBuf packet = PacketByteBufs.create();
                 packet.writeShort(Short.MAX_VALUE);
                 packet.writeInt(transactionId);
 
@@ -52,13 +52,13 @@ public enum ClientboundContextPacket {
         }
     }
 
-    public static void handlePacket(PacketByteBuf buf, ClientboundContextPacket packet) {
+    public static void handlePacket(FriendlyByteBuf buf, ClientboundContextPacket packet) {
         switch (packet) {
             case RESET_CONTEXT -> {
                 OpenBoatUtils.instance.setActiveContext(null);
             }
             case SWITCH_CONTEXT -> {
-                Identifier identifier = Identifier.of(buf.readString());
+                ResourceLocation identifier = ResourceLocation.parse(buf.readUtf());
 
                 if (identifier.getNamespace().equals(OpenBoatUtils.NAMESPACE)) {
                     if (!identifier.equals(OpenBoatUtils.DEFAULT_CONTEXT)) {
@@ -71,7 +71,7 @@ public enum ClientboundContextPacket {
                 OpenBoatUtils.instance.setActiveContext(context);
             }
             case DROP_CONTEXT -> {
-                Identifier identifier = Identifier.of(buf.readString());
+                ResourceLocation identifier = ResourceLocation.parse(buf.readUtf());
 
                 @Nullable ISettingContext context = OpenBoatUtils.instance.dropStoredContext(identifier);
 
@@ -80,7 +80,7 @@ public enum ClientboundContextPacket {
                 }
             }
             case STORE_CONTEXT -> {
-                Identifier identifier = Identifier.of(buf.readString());
+                ResourceLocation identifier = ResourceLocation.parse(buf.readUtf());
 
                 StoredContext storedContext = new StoredContext(identifier);
 
@@ -89,7 +89,7 @@ public enum ClientboundContextPacket {
                 OpenBoatUtils.instance.putStoredContext(identifier, storedContext);
             }
             case ENTITY_CONTEXT -> {
-                UUID id = UUID.fromString(buf.readString());
+                UUID id = UUID.fromString(buf.readUtf());
 
                 EntityContext entityContext = new EntityContext(id);
 

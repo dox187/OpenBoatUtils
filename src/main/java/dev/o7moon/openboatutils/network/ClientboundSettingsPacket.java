@@ -1,11 +1,12 @@
+//~ !boat_entity
 package dev.o7moon.openboatutils.network;
 
 import dev.o7moon.openboatutils.*;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.vehicle.BoatEntity;
-import net.minecraft.network.PacketByteBuf;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.vehicle.Boat;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
@@ -74,7 +75,7 @@ public enum ClientboundSettingsPacket {
         return !isContext;
     }
 
-    public static void handlePacket(PacketByteBuf buf) {
+    public static void handlePacket(FriendlyByteBuf buf) {
         try {
             short packetID = buf.readShort();
 
@@ -84,7 +85,7 @@ public enum ClientboundSettingsPacket {
 
                 handlePacket(buf);
 
-                PacketByteBuf packet = PacketByteBufs.create();
+                FriendlyByteBuf packet = PacketByteBufs.create();
                 packet.writeShort(Short.MAX_VALUE);
                 packet.writeInt(transactionId);
 
@@ -118,7 +119,7 @@ public enum ClientboundSettingsPacket {
         }
     }
 
-    public static void handleContextPacket(MutableContext context, PacketByteBuf buf, boolean isCompound) {
+    public static void handleContextPacket(MutableContext context, FriendlyByteBuf buf, boolean isCompound) {
         short packetID = buf.readShort();
 
         ClientboundSettingsPacket[] packets = ClientboundSettingsPacket.values();
@@ -132,7 +133,7 @@ public enum ClientboundSettingsPacket {
         handleContextPacketPayload(context, buf, packet, isCompound);
     }
 
-    public static void handleContextPacketPayload(MutableContext context, PacketByteBuf buf, ClientboundSettingsPacket packet, boolean isCompound) {
+    public static void handleContextPacketPayload(MutableContext context, FriendlyByteBuf buf, ClientboundSettingsPacket packet, boolean isCompound) {
 
         // All of these are non-context settings, they are handled seperately.
         // Almost certainly should be out of this channel but backwards compatibility!!
@@ -146,8 +147,8 @@ public enum ClientboundSettingsPacket {
                     double y = buf.readDouble();
                     double z = buf.readDouble();
 
-                    if (OpenBoatUtils.minecraft.player != null && OpenBoatUtils.minecraft.player.getVehicle() instanceof BoatEntity boat) {
-                        boat.setVelocity(boat.getVelocity().add(x, y, z));
+                    if (OpenBoatUtils.minecraft.player != null && OpenBoatUtils.minecraft.player.getVehicle() instanceof Boat boat) {
+                        boat.setDeltaMovement(boat.getDeltaMovement().add(x, y, z));
                     }
                 }
                 case APPLY_IMPULSE_RELATIVE -> {
@@ -155,14 +156,14 @@ public enum ClientboundSettingsPacket {
                     double localY = buf.readDouble();
                     double localZ = buf.readDouble();
 
-                    if (OpenBoatUtils.minecraft.player != null && OpenBoatUtils.minecraft.player.getVehicle() instanceof BoatEntity boat) {
-                        double yaw = Math.toRadians(-boat.getYaw());
+                    if (OpenBoatUtils.minecraft.player != null && OpenBoatUtils.minecraft.player.getVehicle() instanceof Boat boat) {
+                        double yaw = Math.toRadians(-boat.getYRot());
 
                         double worldX = localX * Math.cos(yaw) + localZ * Math.sin(yaw);
                         double worldZ = localX * Math.sin(yaw) - localZ * Math.cos(yaw);
 
-                        boat.setVelocity(
-                                boat.getVelocity().add(worldX, localY, -worldZ)
+                        boat.setDeltaMovement(
+                                boat.getDeltaMovement().add(worldX, localY, -worldZ)
                         );
                     }
                 }
@@ -193,8 +194,8 @@ public enum ClientboundSettingsPacket {
             case SET_BLOCKS_SLIPPERINESS -> {
                 float slipperiness = buf.readFloat();
 
-                Arrays.stream(buf.readString().split(","))
-                        .map(Identifier::of)
+                Arrays.stream(buf.readUtf().split(","))
+                        .map(ResourceLocation::parse)
                         .forEach(block -> finalContext.setBlockSlipperiness(block, slipperiness));
             }
             case SET_BOAT_FALL_DAMAGE -> {
@@ -254,8 +255,8 @@ public enum ClientboundSettingsPacket {
                 context.setSwimForce(buf.readFloat());
             }
             case REMOVE_BLOCKS_SLIPPERINESS -> {
-                Arrays.stream(buf.readString().split(","))
-                        .map(Identifier::of)
+                Arrays.stream(buf.readUtf().split(","))
+                        .map(ResourceLocation::parse)
                         .forEach(context::unsetBlockSlipperiness);
             }
             case CLEAR_SLIPPERINESS -> {
@@ -284,8 +285,8 @@ public enum ClientboundSettingsPacket {
                 if (index >= settingTypes.length) return;
                 PerBlockSettingType setting = settingTypes[index];
 
-                Arrays.stream(buf.readString().split(","))
-                        .map(Identifier::of)
+                Arrays.stream(buf.readUtf().split(","))
+                        .map(ResourceLocation::parse)
                         .forEach(block -> finalContext.setBlockSetting(block, setting, value));
             }
             case SET_COLLISION_MODE -> {
@@ -304,8 +305,10 @@ public enum ClientboundSettingsPacket {
                 context.setCollisionResolution(buf.readByte());
             }
             case ADD_COLLISION_ENTITYTYPE_FILTER -> {
-                Arrays.stream(buf.readString().split(","))
-                        .map(EntityType::get)
+                Arrays.stream(buf.readUtf().split(","))
+                        .map(ResourceLocation::tryParse)
+                        .filter(java.util.Objects::nonNull)
+                        .map(BuiltInRegistries.ENTITY_TYPE::getOptional)
                         .filter(Optional::isPresent)
                         .map(Optional::get)
                         .forEach(context::addToCollisionFilter);
