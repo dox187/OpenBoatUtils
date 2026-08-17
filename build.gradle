@@ -22,7 +22,7 @@ repositories {
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     if (project.loom_plugin == 'fabric-loom') {
-        mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+        mappings loom.officialMojangMappings()
         modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
         modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
     } else {
@@ -99,18 +99,48 @@ loom {
 }
 
 stonecutter {
-    replacements.string(
+    // Replacement rules run in both directions: on a version where the predicate is false the
+    // target is rewritten back to the pattern. Every pattern must therefore be a token that
+    // cannot occur in this mod's own identifiers, hence the word boundaries.
+
+    // The boat class is Boat on 1.21 and AbstractBoat from 1.21.3 onwards; the checked-in
+    // sources carry the 1.21 name. This rule and the package rule below match disjoint spans,
+    // so switching directly between any two versions composes correctly.
+    replacements.regex(
             current.parsed.matches('>=1.21.3'),
             "!boat_entity"
     ) {
-        replace 'BoatEntity', 'AbstractBoatEntity'
+        replace '\\bBoat\\b', 'AbstractBoat', '\\bAbstractBoat\\b', 'Boat'
     }
 
+    // 1.21.10 moved the boat classes into world.entity.vehicle.boat; VehicleEntity stayed
+    // behind, so files naming it opt out with //~ !boat_package.
     replacements.string(
-            current.parsed.matches('>=1.21.9'),
-            "!honey_mapping"
+            current.parsed.matches('>=1.21.10'),
+            "!boat_package"
     ) {
-        replace 'method_65067', 'getOldVelocityY'
-        replace 'method_65068', 'getNewVelocityY'
+        replace 'net.minecraft.world.entity.vehicle.', 'net.minecraft.world.entity.vehicle.boat.'
+        replace 'net/minecraft/world/entity/vehicle/', 'net/minecraft/world/entity/vehicle/boat/'
+    }
+
+    // 1.21.10 renamed ResourceLocation to Identifier.
+    replacements.regex(
+            current.parsed.matches('>=1.21.10'),
+            "!identifier"
+    ) {
+        replace '\\bResourceLocation\\b', 'Identifier', '\\bIdentifier\\b', 'ResourceLocation'
+    }
+
+    replacements.regex(
+            current.parsed.matches('>=26'),
+            "!mc26"
+    ) {
+        replace '\\bWaterlilyBlock\\b', 'LilyPadBlock', '\\bLilyPadBlock\\b', 'WaterlilyBlock'
+        replace '\\bPacketByteBufs\\b', 'FriendlyByteBufs', '\\bFriendlyByteBufs\\b', 'PacketByteBufs'
+        replace '\\bplayS2C\\b', 'clientboundPlay', '\\bclientboundPlay\\b', 'playS2C'
+        replace '\\bplayC2S\\b', 'serverboundPlay', '\\bserverboundPlay\\b', 'playC2S'
+        replace '\\bconfigurationS2C\\b', 'clientboundConfiguration', '\\bclientboundConfiguration\\b', 'configurationS2C'
+        replace '\\bconfigurationC2S\\b', 'serverboundConfiguration', '\\bserverboundConfiguration\\b', 'configurationC2S'
+        replace 'renderer\\.state\\.CameraRenderState', 'renderer.state.level.CameraRenderState', 'renderer\\.state\\.level\\.CameraRenderState', 'renderer.state.CameraRenderState'
     }
 }
