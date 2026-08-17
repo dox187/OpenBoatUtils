@@ -76,6 +76,14 @@ public abstract class EntityMixin {
             )
     )
     private void hookWalltap(Entity instance, Vec3 value) {
+        // Restitution also runs on purely vertical collisions, which the pre-26 call site excluded.
+        // The reflection itself would be a no-op there, but walltap scans the hull's block positions
+        // before it can know that, so the guard is what keeps ground contact off that path.
+        if (!instance.horizontalCollision) {
+            instance.setDeltaMovement(value);
+            return;
+        }
+
         openboatutils$walltap(instance, value.x, value.y, value.z);
     }
     *///? } else {

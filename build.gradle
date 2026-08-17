@@ -119,6 +119,9 @@ stonecutter {
     // matches are discarded, so claiming those characters here would swallow the !boat_entity
     // rewrite and leave the leaf Boat class hooked. Requiring a boat name after the segment also
     // makes each direction idempotent, since neither pattern matches its own output.
+    // The alternation must name every class in that package the sources reference; re-check it
+    // against net/minecraft/world/entity/vehicle/boat/ in the client jar when adding a target, as
+    // an omitted name leaves the segment unrewritten and only surfaces as cannot find symbol.
     def boatClasses = '(?:AbstractChestBoat|AbstractBoat|ChestBoat|ChestRaft|Boat|Raft)\\b'
     replacements.regex(
             current.parsed.matches('>=1.21.10'),
